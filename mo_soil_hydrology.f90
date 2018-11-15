@@ -740,31 +740,32 @@ CONTAINS
 
         ! Drainage is calculated with percolation removed from WS_L
         !   de Vrese --- WS_L corrected for incomming percolation
-
+!pdv >
         ! Remove percolating water from the corresponding soil layer and add percolation from the above layer
-        WHERE (.NOT. soil_above(:))       ! surface layer
-          ws_tmp(:) = ws_l(:,i) - percolation(:,i)
-        ELSEWHERE
-          ws_tmp(:) = MIN(field_cap_l(:,i), ws_l(:,i) - percolation(:,i) + percolation(:,i-1))
-        END WHERE
-
-        WHERE (ws_tmp(:) > p_wilt_l(:,i))          ! drainage occurs only above wilting point
-          WHERE (field_cap_l(:,i) > p_wilt_l(:,i))
-          ! drain_min = minimum factor * normalized soil moisture
-            drain_l(:) = zdrmin * (ws_tmp(:) - p_wilt_l(:,i)) / (field_cap_l(:,i)-p_wilt_l(:,i))
-          ELSEWHERE
-            drain_l(:) = 0._dp
-          END WHERE
-          WHERE (ws_tmp(:) > ws_crit(:))
-            drain_crit(:) = (zdrmax-zdrmin) * ((ws_tmp(:) - ws_crit(:)) / (wsat_l(:,i) - ws_crit(:)))**zdrexp
-            drain_l(:) = drain_l(:) + MIN(drain_crit(:), (ws_tmp(:) - ws_crit(:))/delta_time)
-          END WHERE
-          ! drainage is limited by the soil moisture within the layer
-          drain_l(:) = MIN(drain_l(:) * delta_time, (ws_tmp(:) - p_wilt_l(:,i)), (field_cap_l(:,i) * (1._dp - zwdmin)))
-          ws_l(:,i) = ws_l(:,i) - drain_l(:)       ! remove drainage of the layer from soil moisture
-          drainage(:) = drainage(:) + drain_l(:)   ! and add it to the total drainage
-        END WHERE
+!        WHERE (.NOT. soil_above(:))       ! surface layer
+!          ws_tmp(:) = ws_l(:,i) - percolation(:,i)
+!        ELSEWHERE
+!          ws_tmp(:) = MIN(field_cap_l(:,i), ws_l(:,i) - percolation(:,i) + percolation(:,i-1))
+!        END WHERE
+!
+!        WHERE (ws_tmp(:) > p_wilt_l(:,i))          ! drainage occurs only above wilting point
+!          WHERE (field_cap_l(:,i) > p_wilt_l(:,i))
+!          ! drain_min = minimum factor * normalized soil moisture
+!            drain_l(:) = zdrmin * (ws_tmp(:) - p_wilt_l(:,i)) / (field_cap_l(:,i)-p_wilt_l(:,i))
+!          ELSEWHERE
+!            drain_l(:) = 0._dp
+!          END WHERE
+!          WHERE (ws_tmp(:) > ws_crit(:))
+!            drain_crit(:) = (zdrmax-zdrmin) * ((ws_tmp(:) - ws_crit(:)) / (wsat_l(:,i) - ws_crit(:)))**zdrexp
+!            drain_l(:) = drain_l(:) + MIN(drain_crit(:), (ws_tmp(:) - ws_crit(:))/delta_time)
+!          END WHERE
+!          ! drainage is limited by the soil moisture within the layer
+!          drain_l(:) = MIN(drain_l(:) * delta_time, (ws_tmp(:) - p_wilt_l(:,i)), (field_cap_l(:,i) * (1._dp - zwdmin)))
+!          ws_l(:,i) = ws_l(:,i) - drain_l(:)       ! remove drainage of the layer from soil moisture
+!          drainage(:) = drainage(:) + drain_l(:)   ! and add it to the total drainage
+!        END WHERE
       END WHERE
+!pdv <
 
     END DO  ! soil level
 
@@ -873,15 +874,32 @@ CONTAINS
       zdiflog(1:nsoil) = wslog(1:nsoil) - ws_l(jllog,1:nsoil)
     END IF
 
-
+!pdv >
     ! treatment of layer overflow due to diffusion
     !    limit soil moisture to field capacity and add overflow to drainage
-    DO i = 1, nsoil
-      WHERE (dsoil(:,i) > 0._dp .AND. ws_l(:,i) > field_cap_l(:,i))
+    !    if the layer below is bedrock the overflow is added to the drainage
+    DO i = 1, nsoil-1
+      WHERE (dsoil(:,i) > 0._dp .AND. ws_l(:,i) > field_cap_l(:,i) .AND. &
+             dsoil(:,i+1) > 0._dp)
+        ws_l(:,i+1) = ws_l(:,i+1) + ws_l(:,i)-field_cap_l(:,i)
+        ws_l(:,i) = field_cap_l(:,i)
+      ELSEWHERE(dsoil(:,i) > 0._dp .AND. ws_l(:,i) > field_cap_l(:,i))
         drainage(:) = drainage(:) + ws_l(:,i)-field_cap_l(:,i)
         ws_l(:,i) = field_cap_l(:,i)
       END WHERE
     END DO
+    WHERE (dsoil(:,nsoil) > 0._dp .AND. ws_l(:,nsoil) > field_cap_l(:,nsoil))
+      drainage(:) = drainage(:) + ws_l(:,nsoil)-field_cap_l(:,nsoil)
+      ws_l(:,nsoil) = field_cap_l(:,nsoil)
+    END WHERE
+!pdv <
+
+!    DO i = 1, nsoil
+!      WHERE (dsoil(:,i) > 0._dp .AND. ws_l(:,i) > field_cap_l(:,i))
+!        drainage(:) = drainage(:) + ws_l(:,i)-field_cap_l(:,i)
+!        ws_l(:,i) = field_cap_l(:,i)
+!      END WHERE
+!    END DO
 
     !----------------------------------------------------------------------------------------------
     ! debugging output for grid cell jllog
@@ -1165,6 +1183,10 @@ CONTAINS
     REAL(dp) :: fixed(nidx)          ! amount of water below the wilting point, not available for plant
     REAL(dp) :: trans_layer(nidx)    ! transpiration from the layer
     REAL(dp) :: ws(nidx)             ! water within all soil layers
+!pdv >
+    REAL(dp) :: ws_l_new(nidx)         !
+    REAL(dp) :: reduce_ws(nidx)
+!pdv <
 
     ! parameters
 
@@ -1251,15 +1273,49 @@ CONTAINS
     ! changed to close the land surface water balance.
 
     ws(:) = SUM(ws_l(:,:), DIM=2) + SUM(soil_ice(:,:), DIM=2)  ! water and ice  within the column
+!pdv >
+     reduce_ws = reduce_evap
 
+! first the liquid water in the rootzone is reduced to zero starting from the top
     DO jk=1, nsoil
-
-      WHERE (reduce_evap(:) < 0._dp .AND. ws(:) > 0._dp)
+      WHERE (reduce_ws(:) < 0._dp .AND. droot(:,jk) > 0._dp .AND. ws_l(:,jk) > EPSILON(1.0))
         ! reduce soil moisture and ice relative to the water content of each layer
-        ws_l(:,jk)     = MAX(0._dp, ws_l(:,jk)     + reduce_evap(:) * ws_l(:,jk)/ws(:))
-        soil_ice(:,jk) = MAX(0._dp, soil_ice(:,jk) + reduce_evap(:) * soil_ice(:,jk)/ws(:))
+        ws_l_new(:)      = MAX(ws_l(:,jk) + reduce_ws(:), EPSILON(1.0))
+        reduce_ws(:) = reduce_ws(:) + ws_l(:,jk) - ws_l_new(:)
+        ws_l(:,jk)     = ws_l_new(:)
       END WHERE
     END DO
+
+!   In a second step water is reduced to the wilting point in all soil layers starting from the top
+    DO jk=1, nsoil
+      WHERE (reduce_ws(:) < 0._dp .AND. ws_l(:,jk) > field_cap_l(:,jk) * zwilt)
+        ! reduce soil moisture and ice relative to the water content of each layer
+        ws_l_new(:)      = MAX(ws_l(:,jk) + reduce_ws(:), field_cap_l(:,jk) * zwilt)
+        reduce_ws(:) = reduce_ws(:) + ws_l(:,jk) - ws_l_new(:)
+        ws_l(:,jk)     = ws_l_new(:)
+      END WHERE
+    END DO
+
+!    In a third step water and ice are taken from everywhere in the soil
+    ws(:) = SUM(ws_l(:,:), DIM=2) + SUM(soil_ice(:,:), DIM=2)  ! waterand ice  with in the column
+    DO jk=1, nsoil
+      WHERE (reduce_ws(:) < 0._dp .AND. ws(:) > 0._dp)
+        ! reduce soil moisture and ice relative to the water content ofeach layer
+        ws_l(:,jk)     = MAX(0._dp, ws_l(:,jk)     + reduce_ws(:) *ws_l(:,jk)/ws(:))
+        soil_ice(:,jk) = MAX(0._dp, soil_ice(:,jk) + reduce_ws(:) *soil_ice(:,jk)/ws(:))
+      END WHERE
+    END DO
+!
+! pdv <
+
+!    DO jk=1, nsoil
+!
+!      WHERE (reduce_evap(:) < 0._dp .AND. ws(:) > 0._dp)
+!        ! reduce soil moisture and ice relative to the water content of each layer
+!        ws_l(:,jk)     = MAX(0._dp, ws_l(:,jk)     + reduce_evap(:) * ws_l(:,jk)/ws(:))
+!        soil_ice(:,jk) = MAX(0._dp, soil_ice(:,jk) + reduce_evap(:) * soil_ice(:,jk)/ws(:))
+!      END WHERE
+!    END DO
 
     ! make sure there is no negative soil ice
     IF (ANY(soil_ice(:,:) < 0._dp)) THEN

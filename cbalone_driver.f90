@@ -166,6 +166,13 @@ program cbalone_driver
   real(dp),allocatable,dimension(:)    ::  nitrogen_2_litterWoodPool_ag,nitrogen_2_litterWoodPool_bg,nitrogen_2_SMINNpool
   real(dp),allocatable,dimension(:,:)  ::  ndep_forc_tiles !! Version of nbalance%ndep_forc on each tile and with correct unit
   real(dp),allocatable,dimension(:,:)  ::  litter_flux   !! dummy for subroutine call; not used in cbalone
+
+  real(dp),allocatable,dimension(:,:)  ::  leaf_shedding_debug   !! HW dummy for subroutine call; not used in cbalone
+  real(dp),allocatable,dimension(:,:)  ::  Cpool_green_minus_shed_leaves   !! HW dummy for subroutine call; not used in cbalone
+  real(dp),allocatable,dimension(:,:)  ::  excess_carbon_debug   !! HW dummy for subroutine call; not used in cbalone
+  real(dp),allocatable,dimension(:,:)  ::  litter_leaf   !! HW dummy for subroutine call; not used in cbalone
+  real(dp),allocatable,dimension(:,:)  ::  leaf_shedding_rate   !! HW dummy for subroutine call; not used in cbalone
+
   real(dp),allocatable,dimension(:,:)  ::  Cflx_2_crop_harvest !! dummy for subroutine call; flux diagnostics so far not used in cbalone
   real(dp),allocatable,dimension(:,:)  ::  Cflx_crop_harvest_2_atm !! dummy for subroutine call; flux diagnostics so far not used in cbalone
   real(dp),allocatable,dimension(:,:)  ::  Nflx_2_crop_harvest !! dummy for subroutine calll; flux diagnostics so far not used in cbalone
@@ -544,6 +551,18 @@ program cbalone_driver
   allocate(coverFract_interpolated(1:grid%nland,surface%ntiles))
   allocate(litter_flux(1:grid%nland,surface%ntiles))
   litter_flux(:,:)=0.0_dp
+  ! -----HW
+  allocate(leaf_shedding_debug(1:grid%nland,surface%ntiles))
+  leaf_shedding_debug(:,:)=0.0_dp
+  allocate(Cpool_green_minus_shed_leaves(1:grid%nland,surface%ntiles))
+  Cpool_green_minus_shed_leaves(:,:)=0.0_dp
+  allocate(excess_carbon_debug(1:grid%nland,surface%ntiles))
+  excess_carbon_debug(:,:)=0.0_dp
+  allocate(litter_leaf(1:grid%nland,surface%ntiles))
+  litter_leaf(:,:)=0.0_dp
+  allocate(leaf_shedding_rate(1:grid%nland,surface%ntiles))
+  leaf_shedding_rate(:,:)=0.0_dp
+  ! HW-----
   allocate(Cflx_2_crop_harvest(1:grid%nland,surface%ntiles))
   allocate(Cflx_crop_harvest_2_atm(1:grid%nland,surface%ntiles))
   allocate(Nflx_2_crop_harvest(1:grid%nland,surface%ntiles))
@@ -850,6 +869,11 @@ program cbalone_driver
                                     Cflx_2_crop_harvest(1:grid%nland,1:surface%ntiles),               &
                                     Cflx_crop_harvest_2_atm(1:grid%nland,1:surface%ntiles),           &
                                     cbalance%NPP_act_yDayMean(1:grid%nland,1:surface%ntiles),         & 
+                                    leaf_shedding_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    Cpool_green_minus_shed_leaves(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    excess_carbon_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    litter_leaf(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    leaf_shedding_rate(1:grid%nland,1:surface%ntiles),                & ! HW
      frac_litter_wood_new    =         cbalance%frac_litter_wood_new(1:grid%nland,1:surface%ntiles),          &
      ! YASSO variables
      temp2_30d               =         cbalance_diag%pseudo_temp_yDay(1:grid%nland,1:surface%ntiles,day),     &
@@ -951,6 +975,11 @@ program cbalone_driver
                                     Cflx_2_crop_harvest(1:grid%nland,1:surface%ntiles),               &
                                     Cflx_crop_harvest_2_atm(1:grid%nland,1:surface%ntiles),           &
                                     cbalance%NPP_act_yDayMean(1:grid%nland,1:surface%ntiles),         & 
+                                    leaf_shedding_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    Cpool_green_minus_shed_leaves(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    excess_carbon_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    litter_leaf(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    leaf_shedding_rate(1:grid%nland,1:surface%ntiles),                & ! HW
   frac_litter_wood_new      =       cbalance%frac_litter_wood_new(1:grid%nland,1:surface%ntiles),     &
   redFact_Nlimit            =       nbalance%redFact_Nlimitation(1:grid%nland,1:surface%ntiles),      &
   Npool_green               =       nbalance%Npool_green(1:grid%nland,1:surface%ntiles),              &
@@ -1022,6 +1051,11 @@ program cbalone_driver
                                        Cflx_2_crop_harvest(1:grid%nland,1:surface%ntiles),                    &
                                        Cflx_crop_harvest_2_atm(1:grid%nland,1:surface%ntiles),                &
                                        cbalance%NPP_act_yDayMean(1:grid%nland,1:surface%ntiles),              &
+                                    leaf_shedding_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    Cpool_green_minus_shed_leaves(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    excess_carbon_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    litter_leaf(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    leaf_shedding_rate(1:grid%nland,1:surface%ntiles),                & ! HW
      frac_litter_wood_new    =         cbalance%frac_litter_wood_new(1:grid%nland,1:surface%ntiles),          &
      temp2_30d               =         cbalance_diag%pseudo_temp_yDay(1:grid%nland,1:surface%ntiles,day),     &
      precip_30d              =         cbalance_diag%pseudo_precip_yDay(1:grid%nland,1:surface%ntiles,day),   &
@@ -1097,6 +1131,11 @@ program cbalone_driver
                                     Cflx_2_crop_harvest(1:grid%nland,1:surface%ntiles),                       &
                                     Cflx_crop_harvest_2_atm(1:grid%nland,1:surface%ntiles),                   &
                                     cbalance%NPP_act_yDayMean(1:grid%nland,1:surface%ntiles),                 &
+                                    leaf_shedding_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    Cpool_green_minus_shed_leaves(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    excess_carbon_debug(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    litter_leaf(1:grid%nland,1:surface%ntiles),                & ! HW
+                                    leaf_shedding_rate(1:grid%nland,1:surface%ntiles),                & ! HW
           frac_litter_wood_new    = cbalance%frac_litter_wood_new(1:grid%nland,1:surface%ntiles)              &
                                     )
                  END IF
@@ -1495,6 +1534,11 @@ program cbalone_driver
   DEALLOCATE(CO2_emission_landcover_change, CO2_emission_harvest, CO2_flux_dynveg)
   DEALLOCATE(carbon_2_atmos, carbon_2_litterGreenPools, carbon_2_litterWoodPool_ag, carbon_2_litterWoodPool_bg)
   DEALLOCATE(coverFract_interpolated, litter_flux, glacier_1d)
+  DEALLOCATE(leaf_shedding_debug) ! HW
+  DEALLOCATE(Cpool_green_minus_shed_leaves) ! HW
+  DEALLOCATE(excess_carbon_debug) ! HW
+  DEALLOCATE(litter_leaf) ! HW
+  DEALLOCATE(leaf_shedding_rate) ! HW
   DEALLOCATE(LeafLit_coef, WoodLit_coef, WoodLitterSize)
 
   DEALLOCATE(N2_emission_landcover_change, N2_emission_harvest, N2_flux_dynveg) 

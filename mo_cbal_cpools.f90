@@ -163,7 +163,13 @@ contains
                                           Cflx_litterTotal,                                                   &
                                           Cflx_herbivory,Cflx_herbivory_LG, Cflx_herbivory_2_atm,             &
                                           Cflx_2_crop_harvest, Cflx_crop_harvest_2_atm,                       &
-                                          NPP_act, frac_litter_wood_new,                                      &
+                                          NPP_act,&
+                                          leaf_shedding_debug,   & ! HW   
+                                          Cpool_green_minus_shed_leaves,     & ! HW
+                                          excess_carbon_debug, & !HW  
+                                          litter_leaf,   & ! HW   
+                                          leaf_shedding_rate, & ! HW  
+                                          frac_litter_wood_new,                                      &
                                           ! Yasso variables
                                           temp2_30d, precip_30d,                                              &
                                           YCpool_acid_ag1, YCpool_water_ag1, YCpool_ethanol_ag1,              &
@@ -240,6 +246,13 @@ contains
     real(dp),intent(out)   :: root_exudates          !! Value of NPP_2_rootExudates had to be dropped into the litter_green_bg pool.
                                                      !!    [mol(C)/m^2 s]
     real(dp),intent(out)   :: Cflx_litterTotal       !! Total carbon flux from vegetation to litter (green+woody, ag+bg)
+
+    real(dp),intent(out)   :: leaf_shedding_debug       !! HW
+    real(dp),intent(out)   :: Cpool_green_minus_shed_leaves     !! HW
+    real(dp),intent(out)   :: excess_carbon_debug       !! HW
+    real(dp),intent(out)   :: litter_leaf       !! HW
+    real(dp),intent(in)   :: leaf_shedding_rate       !! HW
+
     real(dp),intent(out)   :: Cflx_herbivory         !!
     real(dp),intent(out)   :: Cflx_herbivory_LG      !!
     real(dp),intent(out)   :: Cflx_herbivory_2_atm   !!
@@ -442,6 +455,12 @@ contains
     excess_NPP            = 0.0_dp
     root_exudates         = 0.0_dp
     Cflx_litterTotal      = 0.0_dp
+
+    leaf_shedding_debug      = 0.0_dp ! HW
+    Cpool_green_minus_shed_leaves     = 0.0_dp ! HW
+    excess_carbon_debug      = 0.0_dp ! HW
+    litter_leaf      = 0.0_dp ! HW
+
     Cflx_herbivory        = 0.0_dp
     Cflx_herbivory_LG     = 0.0_dp
     Cflx_herbivory_2_atm  = 0.0_dp
@@ -512,15 +531,33 @@ contains
 !!$          leaf_shedding = LAI_previous - LAI                      !!    the leaf shedding is given by the decrease in LAI.
 !!$       END IF
 !!$ tr
-       leaf_shedding = MAX(LAI * LAI_shed_constant,LAI_previous - LAI)  !! Leaf shedding is assured at a minimum constant rate 
-                                                                        !! which maybe exceeded by the decrease in LAI.       
+
+! ------HW
+       leaf_shedding=leaf_shedding_rate*LAI_previous*1.0_dp
+       leaf_shedding_debug=leaf_shedding
+! HW---- 
+!       leaf_shedding = MAX(LAI * LAI_shed_constant,LAI_previous - LAI)  !! Leaf shedding is assured at a minimum constant rate 
+!                                                                        !! which maybe exceeded by the decrease in LAI.       
 
        C_2_litter_greenPool =  &                                     !! Maximally the whole carbon from the green pool is transfered
-          min(greenC2leafC * leaf_shedding / specific_leaf_area_C, & !!    by leaf and root shedding to the green litter pool
+          min(2.0_dp * leaf_shedding / specific_leaf_area_C, & !!    by leaf and root shedding to the green litter pool
           Cpool_green)                                               
-       Cpool_green = Cpool_green - C_2_litter_greenPool              !! This removes carbon from the green pool
+
+
+       Cpool_green_minus_shed_leaves = Cpool_green- 2.0_dp * leaf_shedding /specific_leaf_area_C      ! HW
+
+!       Cpool_green = Cpool_green - C_2_litter_greenPool              !! This removes carbon from the green pool
+
+!!       Cpool_green = max(Cpool_green - greenC2leafC * (LAI_previous - LAI) / specific_leaf_area_C,0.0_dp)     !! HW 
+         !! This removes net carbon change from the green pool HW
+
+       Cpool_green = max(Cpool_green - 2.0_dp * leaf_shedding / specific_leaf_area_C,0.0_dp)     !! HW
+        !! This removes litter carbon from the green pool HW
        excess_carbon = max(0.0_dp,Cpool_green - Cpool_green_max)     !! If by the reduction of LAI the maximum value of the green
                                                                      !!    pool is still smaller than the current value, there is 
+
+       excess_carbon_debug=excess_carbon     ! HW
+
        C_2_litter_greenPool = C_2_litter_greenPool + excess_carbon   !!    excess C that has also to be shedded to the green litter
        Cpool_green = Cpool_green - excess_carbon                     !!    pool and also substracted from the green pool
 
@@ -558,6 +595,7 @@ contains
        END IF
 
        Cflx_litterTotal = C_2_litter_greenPool
+       litter_leaf = C_2_litter_greenPool ! HW
 
        !! ---------------------------------------------------------------------------------
        !! Herbivory loss from Cpool_green & Npool_green w.r.t PFTs in lctlib
@@ -1230,6 +1268,7 @@ contains
 
        !! ============== Litter and herbivory diagnostics (flux from day-1 to s-1)
        Cflx_litterTotal = Cflx_litterTotal /sec_per_day
+       litter_leaf = litter_leaf /sec_per_day ! HW
        Cflx_herbivory    = Green_2_herbivory / sec_per_day
        Cflx_herbivory_LG = Cflx_faeces_2_LG / sec_per_day   ! DSG: goes into yasso
 

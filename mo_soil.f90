@@ -163,6 +163,7 @@ MODULE mo_soil
        evapotranspiration,                  &  !! Evaporation and transpiration (for time step)
        evapotranspiration_acc,              &  !! Evaporation and transpiration (accumulated)
        evaporation_pot,                     &  !! Potential evaporation (for time step)
+       evaporation_pot_acc, & !! HW
        transpiration,                       &  !! Transpiration (for time step)
        transpiration_acc,                   &  !! Transpiration (accumulated)
        sensible_heat_flux,                  &  !! Sensible heat flux (for time step) [W/m^2]
@@ -758,7 +759,11 @@ CONTAINS
     CALL add(IO_soil, 'evapotranspiration',      soil%evapotranspiration_acc,longname='Evapotranspiration (avg)', &
              units='kg m-2 s-1',           ldims=dim3p, gdims=dim3, dimnames=dim3n, code=44, laccu=.TRUE., lpost=.FALSE.)
     CALL add(IO_soil, 'evaporation_pot_inst',    soil%evaporation_pot,       longname='Potential Evaporation', &
-             units='kg m-2 s-1',           ldims=dim3p, gdims=dim3, dimnames=dim3n, code=45, lpost=.FALSE.)
+             units='kg m-2 s-1',           ldims=dim3p, gdims=dim3, dimnames=dim3n, code=45, lpost=.True.)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! HW
+    CALL add(IO_soil, 'evaporation_pot_acc',    soil%evaporation_pot_acc,       longname='Potential Evaporation acc', &
+             units='kg m-2 s-1',           ldims=dim3p, gdims=dim3, dimnames=dim3n, code=46,lrerun=.false., laccu=.true., lpost=.True.)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! HW
     CALL add(IO_soil, 'transpiration_inst',      soil%transpiration,         longname='Transpiration (inst.)', &
              units='kg m-2 s-1',           ldims=dim3p, gdims=dim3, dimnames=dim3n, code=75, lpost=.FALSE.)
     CALL add(IO_soil, 'transpiration',           soil%transpiration_acc,     longname='Transpiration (avg)', &
@@ -1636,6 +1641,7 @@ CONTAINS
     soil%latent_heat_acc                  = 0._dp
     soil%sensible_heat_flux               = 0._dp
     soil%sensible_heat_acc                = 0._dp
+    soil%evaporation_pot_acc=0._dp ! HW
 
     soil%heat_capacity                    = 0._dp
     soil%ground_heat_flux                 = 0._dp
@@ -3111,6 +3117,11 @@ CONTAINS
             soil%latent_heat_flux(kidx0:kidx1,:) * delta_time
        soil%sensible_heat_acc(kidx0:kidx1,:) = soil%sensible_heat_acc(kidx0:kidx1,:) + &
             soil%sensible_heat_flux(kidx0:kidx1,:) * delta_time
+        !!!! HW
+       soil%evaporation_pot_acc(kidx0:kidx1,:) = soil%evaporation_pot_acc(kidx0:kidx1,:) + &
+            soil%evaporation_pot(kidx0:kidx1,:) * delta_time !!!! HW
+        !!!! HW
+        
        soil%qair_acc(kidx0:kidx1,:) = soil%qair_acc(kidx0:kidx1,:) + &
             soil%qair(kidx0:kidx1,:) * delta_time
     END WHERE

@@ -298,6 +298,9 @@ CONTAINS
     REAL(dp), DIMENSION(kland) :: zsurf_runoff_hd  !! Surface runoff in [m] for whole time step
     REAL(dp), DIMENSION(kland) :: zdrainage_hd     !! Drainage in [m] for whole time step
 
+    REAL(dp), DIMENSION(kland) :: relative_wilting_point   !! HW
+    REAL(dp), DIMENSION(kland,theLand%ntiles) :: leaf_shedding_rate   !! HW
+
     LOGICAL :: climbuf_init_running_means          !! climbuf option that is also needed in dynveg
     INTEGER :: ntiles, nsoil
 
@@ -909,7 +912,8 @@ CONTAINS
            zN2O_flux_depfix(1:nidx),                                      & ! N2O emission from deposition and fixation [kg(N2O)/m2 s]
            zN2O_flux_nfert(1:nidx),                                       & ! N2O emission from fertilization [kg(N2O)/m^2 s]
            zN2O_flux_grazing(1:nidx),                                     & ! N2O emission from herbivores [kg(N2O)/m^2 s]
-           zN2_emission_ecosystem(1:nidx))                                  ! net ecosystem N2 emissions [kg(N2)/m^2 s]
+           zN2_emission_ecosystem(1:nidx),                &                  ! net ecosystem N2 emissions [kg(N2)/m^2 s]
+           leaf_shedding_rate(kidx0:kidx1,1:ntiles)) ! HW
 
    ELSE
       zCO2_flux_npp(1:nidx) = 0._dp
@@ -917,6 +921,9 @@ CONTAINS
       zCO2_flux_herbivory(1:nidx) = 0._dp
       zCO2_flux_npp_test(1:nidx) = 0._dp
    END IF
+
+   ! HW calculate relative wilting point
+   relative_wilting_point(kidx0:kidx1)=theLand%soilparam%WiltingPoint(kidx0:kidx1)/theLand%soilparam%FieldCapacity(kidx0:kidx1)
 
    ! Update phenology, i.e. recompute LAI
 
@@ -933,7 +940,10 @@ CONTAINS
               theLand%Soil%relative_moisture(kidx0:kidx1,1:ntiles), &
               theLand%cbalance%NPP_rate(kidx0:kidx1,1:ntiles), &
               specificLeafArea_C(1:nidx,1:ntiles), &
-              theLand%Domain%lat(kidx0:kidx1))
+              theLand%Domain%lat(kidx0:kidx1), &
+              relative_wilting_point(kidx0:kidx1),  &  ! HW
+              leaf_shedding_rate(kidx0:kidx1,1:ntiles) & ! HW
+              )
       CASE('KNORR')
          CALL update_phenology_ccdas(nidx, theLand%LctLibrary, &
               theLand%Vegetation%lai(kidx0:kidx1, 1:ntiles), &

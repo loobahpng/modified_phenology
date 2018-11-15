@@ -172,6 +172,14 @@ module mo_cbal_bethy
      REAL(dp),POINTER :: box_Cflx_crop_harvest_2_atm(:) !! C flux from crop harvest pool to atmosphere [mol(C)/m^2(grid box) s]
      REAL(dp),POINTER :: litter_flux(:,:)             !! Carbon flux from the vegetation to the litter pools [mol(C)/m^2(canopy) s]
      REAL(dp),POINTER :: box_litter_flux(:,:)         !! Same as litter_flux, but relative to grid box area [mol(C)/m^2(grid box) s]
+     ! -----HW
+     REAL(dp),POINTER :: leaf_shedding_debug(:,:)             !!
+     REAL(dp),POINTER :: Cpool_green_minus_shed_leaves(:,:)             !!
+     REAL(dp),POINTER :: excess_carbon_debug(:,:)             !!
+     REAL(dp),POINTER :: litter_leaf(:,:)             !! Carbon flux from the leaf to the litter pools [mol(C)/m^2(canopy) s]
+     REAL(dp),POINTER :: box_litter_leaf(:,:)         !! Same as litter_leaf, but relative to grid box area [mol(C)/m^2(grid box) s]
+     real(dp),pointer :: leaf_shedding_rate(:,:) ! HW
+     ! HW-----
      REAL(dp),POINTER :: box_Cpools_total(:)          !! Sum of all carbon pools [mol(C)/m^2(grid box)]
      REAL(dp),POINTER :: box_Cpools_total_old(:)      !! Array needed for carbon conservation test
      REAL(dp),POINTER :: box_Cpools_total_old2(:)     !! Array needed for carbon conservation test
@@ -937,6 +945,26 @@ CONTAINS
     CALL add(IO_cbalance,'box_litter_flux', cbalance_diag%box_litter_flux, contnorest=.TRUE.,          &
              longname='Total litter flux entering the soil pools', units='mol(CO2) m-2(grid box) s-1', &
              ldims=dim3p, gdims=dim3, dimnames=dim3n, code=175, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    ! -----HW
+    CALL add(IO_cbalance,'leaf_shedding_debug',cbalance_diag%leaf_shedding_debug, contnorest=.true. ,     &
+             longname='leaf_shedding_debug', units='',  &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=212, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'Cpool_green_minus_green_litter',cbalance_diag%Cpool_green_minus_shed_leaves, contnorest=.true. ,  &
+             longname='Cpool_green_minus_green_litter', units='',  &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=213, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'excess_carbon_debug',cbalance_diag%excess_carbon_debug, contnorest=.true. ,     &
+             longname='excess_carbon_debug', units='',  &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=214, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'litter_green',cbalance_diag%litter_leaf, contnorest=.true. ,     &
+             longname='green litter flux entering the soil pools', units='mol(CO2) m-2(canopy) s-1',  &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=215, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'box_litter_green', cbalance_diag%box_litter_leaf, contnorest=.TRUE.,          &
+             longname='green litter flux entering the soil pools', units='mol(CO2) m-2(grid box) s-1', &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=179, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'leaf_shedding_rate', cbalance_diag%leaf_shedding_rate, contnorest=.TRUE.,          &
+             longname='leaf_shedding_rate', units='', &
+             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=180, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    ! HW-----
     CALL add(IO_cbalance,'box_Cpools_total',cbalance_diag%box_Cpools_total, contnorest=.TRUE.,              &
              longname='Sum of carbon from all carbon pools',   units='mol(CO2) m-2(grid box)',              &
              ldims=dim1p, gdims=dim1, dimnames=dim1n, code=176, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
@@ -1810,6 +1838,13 @@ CONTAINS
     cbalance_diag%box_GPP_yDayMean = 0.0_dp
     cbalance_diag%litter_flux = 0.0_dp
     cbalance_diag%box_litter_flux = 0.0_dp
+    ! ---HW
+    cbalance_diag%leaf_shedding_debug = 0.0_dp
+    cbalance_diag%Cpool_green_minus_shed_leaves = 0.0_dp
+    cbalance_diag%excess_carbon_debug = 0.0_dp
+    cbalance_diag%litter_leaf = 0.0_dp
+    cbalance_diag%box_litter_leaf = 0.0_dp
+    ! HW---
     cbalance_diag%box_Cpools_total = 0.0_dp
     IF (lcc_scheme==2) THEN
        cbalance_diag%boxC_onSite_avg      (:) = 0._dp
@@ -2116,6 +2151,7 @@ CONTAINS
                                    N2O_flx2atm_nfert, &
                                    N2O_flx2atm_grazing, &
                                    N2_flx2atm_ecosystem &
+                                   , leaf_shedding_rate & ! HW
                                    )
 
     
@@ -2152,6 +2188,9 @@ CONTAINS
     REAL(dp),INTENT(in)               :: precip(:)                 !! Precipitation rate [kg/(m^2 s)]
     real(dp),intent(in)               :: drainage(:)               !! drainage in [m/s]
     real(dp),intent(in)               :: maxmoisture(:)            !! depth of soil water buckets [m]
+
+    real(dp),intent(in)               :: leaf_shedding_rate(:,:)   !! HW
+
     REAL(dp),INTENT(out)              :: CO2_flx2atm_npp(:)        !! grid cell averages of net CO2 fluxes between
     REAL(dp),INTENT(out)              :: CO2_flx2atm_soilresp(:)   !! .. biosphere (due to NPP, soil respiration and
     REAL(dp),INTENT(out)              :: CO2_flx2atm_herbivory(:)  !! .. grazing) and atmosphere [kg(CO2)/(m^2(ground) s)]
@@ -2214,6 +2253,8 @@ CONTAINS
     N2O_flx2atm_nfert(1:nidx)     = 0._dp
     N2O_flx2atm_grazing(1:nidx)   = 0._dp
     N2_flx2atm_ecosystem(1:nidx)  = 0._dp
+
+    cbalance_diag%leaf_shedding_rate=leaf_shedding_rate ! HW
 
     IF (read_cpools .AND. (lstart .OR. lresume)) THEN
        cbalance%Cpool_green(kidx0:kidx1,:)   = init_Cpool_green(kidx0:kidx1,:)
@@ -2482,6 +2523,11 @@ CONTAINS
                               cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                               cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                               cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new      =cbalance%frac_litter_wood_new(kidx0:kidx1,:),      &
     redFact_Nlimit            =nbalance%redFact_Nlimitation(kidx0:kidx1,:),        &      
     Npool_green               =nbalance%Npool_green(kidx0:kidx1,:),                &     
@@ -2550,6 +2596,11 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+                               cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new    =  cbalance%frac_litter_wood_new(kidx0:kidx1,:),       &
                      ! variables only needed with yasso   
     temp2_30d               =  SPREAD(cbalance_diag%pseudo_temp_yDay(kidx0:kidx1),DIM=2,NCOPIES=ntiles),    &
@@ -2655,6 +2706,11 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+                               cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new    =  cbalance%frac_litter_wood_new(kidx0:kidx1,:),       &
                      ! variables only needed with yasso   
     temp2_30d               =  SPREAD(cbalance_diag%pseudo_temp_yDay(kidx0:kidx1),DIM=2,NCOPIES=ntiles),    &
@@ -2731,6 +2787,11 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+                               cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
+                              cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
        frac_litter_wood_new  = cbalance%frac_litter_wood_new(kidx0:kidx1,:)        &
                                )
 
@@ -2835,6 +2896,7 @@ CONTAINS
       cbalance_diag%box_NPP_flux_correction(kidx0:kidx1,:)= cbalance%NPP_flux_correction(kidx0:kidx1,:) * areaWeightingFactor(:,:)
       cbalance_diag%box_GPP_yDayMean(kidx0:kidx1,:)       = cbalance_diag%GPP_yDayMean(kidx0:kidx1,:)   * areaWeightingFactor(:,:)
       cbalance_diag%box_litter_flux(kidx0:kidx1,:)        = cbalance_diag%litter_flux(kidx0:kidx1,:)    * areaWeightingFactor(:,:)
+      cbalance_diag%box_litter_leaf(kidx0:kidx1,:)        = cbalance_diag%litter_leaf(kidx0:kidx1,:)    * areaWeightingFactor(:,:) ! HW
       cbalance_diag%box_root_exudates(kidx0:kidx1,:)      = cbalance%root_exudates(kidx0:kidx1,:)       * areaWeightingFactor(:,:)
       cbalance_diag%box_Cflux_herbivory(kidx0:kidx1,:)    = cbalance%Cflux_herbivory(kidx0:kidx1,:)     * areaWeightingFactor(:,:)
       cbalance_diag%box_Cflux_herbivory_2_atm(kidx0:kidx1,:) = cbalance%Cflux_herbivory_2_atm(kidx0:kidx1,:) &

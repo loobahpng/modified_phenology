@@ -35,6 +35,7 @@ MODULE mo_phenology
   USE mo_exception,   ONLY: finish, message
   USE mo_util_string, ONLY: int2string, real2string
   USE mo_mpi,         ONLY: p_parallel_io
+!  USE mo_netcdf,      ONLY: IO_INQ_VARID ! HW for read wilting point
 
   IMPLICIT NONE  
 
@@ -371,6 +372,10 @@ CONTAINS
        CALL set_phenology_parameters()                 !! Use standard parameters
     END IF
 
+    ! ---HW read in parameter
+    CALL read_phenology_parameters(paramFileName='pheno_param_input')
+    ! ---HW
+
     ! --- define phenology stream
 
     IF (PRESENT(stream)) THEN 
@@ -481,6 +486,11 @@ CONTAINS
     ! --- debug message 
 
     IF (p_parallel_io)  CALL print_phenology_parameters
+
+    ! ---HW print out for test
+    CALL print_phenology_parameters(paramFileName='pheno_param_used')
+    ! ---HW
+
     CALL message('init_phenology()','Initialization of PHENOLOGY finished.')
 
 
@@ -498,7 +508,7 @@ CONTAINS
   ! landpoints a particular processor handles (e.g. the LAI). The block currently processed by the processor is 
   ! procArray(kstart:kend) --- this is what has to be handed over to update_phenology().
   !
-  SUBROUTINE update_phenology(kidx,pheno_type_of_tile,lai,laiMax_stat,air_temp,relative_moisture,NPP_rate,specLeafArea,lat)
+  SUBROUTINE update_phenology(kidx,pheno_type_of_tile,lai,laiMax_stat,air_temp,relative_moisture,NPP_rate,specLeafArea,lat,relative_wilting_point,leaf_shedding_rate) ! HW
 
     INTEGER, INTENT(IN)           :: kidx                      !! the number of elements in the current call (= kend - kstart +1)
     INTEGER, INTENT(in)           :: pheno_type_of_tile(:,:)   !! The phenology types of the tiles of grid points (including
@@ -509,6 +519,8 @@ CONTAINS
     REAL(dp),INTENT(in)           :: air_temp(:)               !! Air temperature at current time step in lowest atmospheric layer
                                                                !! for each grid point. Dimension: (1:nidx)
     REAL(dp),INTENT(in)           :: relative_moisture(:,:)    !! Filling of the soil water bucket. Dimension: (1:nidx,1:ntiles)
+    REAL(dp),INTENT(in)           :: relative_wilting_point(:)    !! relative wilting point. Dimension: (1:nidx) !HW
+    REAL(dp),INTENT(out)        :: leaf_shedding_rate(:,:)        !!  Dimension:(1:nidx,1:ntiles) !HW
     REAL(dp),INTENT(in)           :: NPP_rate(:,:)             !! Net primary production rate density [mol(CO2)/m^2/s] for each PFT.
                                                                !! Needed to determine the shedding rate of raingreens and grasses.
                                                                !! Dimension: (1:nidx,1:ntiles) 
@@ -603,6 +615,7 @@ CONTAINS
 
        DO j=1,nidx
           k=kidx0+j-1
+          leaf_shedding_rate(j,i)=-1.0_dp ! HW
           SELECT CASE(pheno_type_of_tile(j,i))
              CASE(unvegetated) ! --- bare land ------------------------
                 !lai(j,i) =  PhenParams%all%LAI_negligible%v 
@@ -645,21 +658,28 @@ CONTAINS
                                                                                            
                 !! If LAI dropped below seed value and there is sufficient water, then start growth at least with seed value but
                 !! smaller than laiMax. (Note: addition of 1E-3_dp for numerical reasons)
-                IF(average_filling(j) > PhenParams%all%wilt_point%v + 1E-3_dp) THEN         
+!                IF(average_filling(j) > PhenParams%all%wilt_point%v + 1E-3_dp) THEN         
+!                IF(average_filling(j) > relative_wilting_point(j) + 1E-3_dp) THEN   ! HW      
                    IF(lai(j,i) < PhenParams%all%laiSeed%v                                 &
                          .and.                                                            &
                       average_filling(j) > PhenParams%RG%bucketFill_leafout%v ) THEN
                       lai(j,i) = MIN(laiMax_dyn(k,i)-EPSILON(1.0),PhenParams%all%laiSeed%v)
                    ENDIF                                                                    
-                   IF(previous_day_NPP_rate(k,i) > 0._dp) THEN                           !! If yesterdays net production is positive
+                   !IF(previous_day_NPP_rate(k,i) > 0._dp) THEN                           !! If yesterdays net production is positive
                       grRate = PhenParams%RG%growthRate%v
-                      xtmp   = shedRate_RG(average_filling(j))
-                      lai(j,i) =  letItGrow(lai(j,i), grRate, xtmp, laiMax_dyn(k,i))     !! start growing.
-                   END IF 
-                ELSE                                                                     !! In case of bad growth conditions
-                   xtmp = PhenParams%RG%shedRate_drySeason%v
-                   lai(j,i) = letItDie(lai(j,i), xtmp)                                   !! shed leaves as fast as possible.
-                END IF
+                      xtmp   = shedRate_RG(average_filling(j),relative_wilting_point(j))  ! HW    
+                      leaf_shedding_rate(j,i)=xtmp                                        ! HW
+                      !!!! use RG%shedRate_drySeason as growth rate
+                      lai(j,i) =  letItGrow(lai(j,i), PhenParams%RG%shedRate_drySeason%v, xtmp, laiMax_dyn(k,i))     !! start growing. HW use RG%shedRate_drySeason as growth rate
+
+!                      lai(j,i) =  letItGrow(lai(j,i), grRate, xtmp, laiMax_dyn(k,i))     !! start growing.
+                   !END IF 
+! --- HW remove the if condition
+!                ELSE                                                                     !! In case of bad growth conditions
+!                   xtmp = PhenParams%RG%shedRate_drySeason%v
+!                   lai(j,i) = letItDie(lai(j,i), xtmp)                                   !! shed leaves as fast as possible.
+!                END IF
+! ----------HW
              CASE(grasses) ! --- grasses ------------------------
                 ! Surprisingly the current concept for grasses is more restrictive than that for raingreens!
 
@@ -667,7 +687,8 @@ CONTAINS
                 !! value, but smaller than laiMax. (Note: addition of 1E-3_dp for numerical reasons)
                 IF(air_temp(j) > PhenParams%GRS%crit_temp%v &
                      .AND. &
-                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v  + 1E-3_dp &
+!                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v  + 1E-3_dp &
+                      soil_moist_filling(j,1,i) > relative_wilting_point(j)  + 1E-3_dp &   !HW
                    ) THEN
                    IF(lai(j,i) < PhenParams%all%laiSeed%v) THEN
                        lai(j,i) = MIN(laiMax_dyn(k,i)-EPSILON(1.0),PhenParams%all%laiSeed%v)
@@ -691,7 +712,8 @@ CONTAINS
                 !! conditions. (Note: addition of 0.001 for numerical reasons)
                 IF(growth_phase_CRP(k) > -0.5_dp                                        &
                      .AND.                                                              &
-                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v + 1E-3_dp &
+!                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v + 1E-3_dp &
+                      soil_moist_filling(j,1,i) > relative_wilting_point(j) + 1E-3_dp &  !HW
                   ) THEN
 
                    !! If also temperature is fine growth should start at least with seed value ( < laiMax) if upper soil layer 
@@ -725,7 +747,8 @@ CONTAINS
                 !!  (addition of 0.001 for numerical reasons)
                 IF(pseudo_soil_temp(k) > PhenParams%CRP%crit_temp%v                     &
                      .AND.                                                              &
-                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v + 1E-3_dp &
+!                      soil_moist_filling(j,1,i) > PhenParams%all%wilt_point%v + 1E-3_dp &
+                      soil_moist_filling(j,1,i) > relative_wilting_point(j) + 1E-3_dp &  ! HW
                   ) THEN
                    !! growth should start at least with with seed value ( < laiMax) if upper soil layer has at least a little bit
                    !! water
@@ -1286,13 +1309,18 @@ CONTAINS
   ! aging. Below this critical value the shedding rate increases because the plants adapt to lower water availability. At the 
   ! wilting point the shedding is so large, that it is larger than the assumed fixed growth rate.
   !
-  REAL(dp) elemental FUNCTION shedRate_RG(bucket_filling)
+  REAL(dp) elemental FUNCTION shedRate_RG(bucket_filling,relative_wilting_point) ! HW       
     REAL(dp),INTENT(IN) :: bucket_filling     !! average filling of the soil water buckets
+    REAL(dp),INTENT(IN) :: relative_wilting_point     !! ! HW
 
     REAL(dp) shedRate,slope
 
-    slope = PhenParams%RG%growthRate%v / (PhenParams%RG%bucketFill_critical%v - PhenParams%all%wilt_point%v) 
-    shedRate = PhenParams%RG%growthRate%v + PhenParams%RG%shedRate_aging%v - slope * (bucket_filling - PhenParams%all%wilt_point%v)
+!    slope = PhenParams%RG%growthRate%v / (PhenParams%RG%bucketFill_critical%v - PhenParams%all%wilt_point%v) 
+!    shedRate = PhenParams%RG%growthRate%v + PhenParams%RG%shedRate_aging%v - slope * (bucket_filling - PhenParams%all%wilt_point%v)
+
+    ! HW
+    slope = PhenParams%RG%growthRate%v / (PhenParams%RG%bucketFill_critical%v - relative_wilting_point) 
+    shedRate = PhenParams%RG%growthRate%v + PhenParams%RG%shedRate_aging%v - slope * (bucket_filling - relative_wilting_point)
     shedRate_RG = MIN(MAX(PhenParams%RG%shedRate_aging%v,shedRate),PhenParams%RG%growthRate%v+PhenParams%RG%shedRate_aging%v)
     
   END FUNCTION shedRate_RG
@@ -1446,9 +1474,10 @@ CONTAINS
                    = set_rdata(1.20e-01_dp,"RG%shedRate_drySeason",LBOUND=1._dp / 180._dp,UBOUND=0.5_dp,UNITS="1/days")
     no=no+1; params%RG%shedRate_aging       => params%memory(no)
              params%RG%shedRate_aging       &
-                   = set_rdata(5.0e-03_dp,"RG%shedRate_aging",LBOUND=1._dp / 730._dp,UBOUND=1._dp / 90._dp,UNITS="1/days")
+                   = set_rdata(5.0e-03_dp,"RG%shedRate_aging",LBOUND=1._dp / 73000._dp,UBOUND=1._dp / 90._dp,UNITS="1/days") ! HW
+!                   = set_rdata(5.0e-03_dp,"RG%shedRate_aging",LBOUND=1._dp / 730._dp,UBOUND=1._dp / 90._dp,UNITS="1/days")
     no=no+1; params%RG%growthRate         => params%memory(no)
-             params%RG%growthRate         =  set_rdata(8.0e-02_dp,"RG%growthRate",LBOUND=0.001_dp,UBOUND=0.46_dp,UNITS="1/days")
+             params%RG%growthRate         =  set_rdata(8.0e-02_dp,"RG%growthRate",LBOUND=0.0001_dp,UBOUND=0.46_dp,UNITS="1/days")
     no=no+1; params%RG%bucketFill_critical => params%memory(no)
              params%RG%bucketFill_critical &
                    = set_rdata(6.50e-01_dp,"RG%bucketFill_critical",LBOUND=params%all%wilt_point%v,UBOUND=1.0_dp,UNITS="--")
