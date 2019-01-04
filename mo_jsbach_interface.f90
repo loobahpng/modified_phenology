@@ -299,6 +299,7 @@ CONTAINS
     REAL(dp), DIMENSION(kland) :: zdrainage_hd     !! Drainage in [m] for whole time step
 
     REAL(dp), DIMENSION(kland) :: relative_wilting_point   !! HW
+    REAL(dp), DIMENSION(kland,theLand%ntiles) :: relative_extractable_water   !! HW REW
     REAL(dp), DIMENSION(kland,theLand%ntiles) :: leaf_shedding_rate   !! HW
 
     LOGICAL :: climbuf_init_running_means          !! climbuf option that is also needed in dynveg
@@ -881,7 +882,13 @@ CONTAINS
             theLand%Vegetation%canopy_conductance_limited(kidx0:kidx1,1:ntiles), &   !! Limited canopy conductance (input)
             lstart, lresume, & 
             theOptions%UseLimitCO2Fert)
-      
+ 
+ DO itile=1,ntiles ! HW calculation of REW 
+   relative_extractable_water(kidx0:kidx1,itile)=&
+ (theLand%Soil%moisture(kidx0:kidx1,itile)/theLand%soilparam%RootDepth(kidx0:kidx1/itile)-theLand%soilparam%WiltingPoint(kidx0:kidx1))/&
+ (theLand%soilparam%FieldCapacity(kidx0:kidx1)-theLand%soilparam%WiltingPoint(kidx0:kidx1)) 
+ ! moisture in m; WiltingPoint and FieldCapacity in m/m
+ END DO     
       CALL update_cbalance_bethy(   &
            theLand%Cbalance,        &
            theLand%Nbalance,        &
@@ -913,7 +920,8 @@ CONTAINS
            zN2O_flux_nfert(1:nidx),                                       & ! N2O emission from fertilization [kg(N2O)/m^2 s]
            zN2O_flux_grazing(1:nidx),                                     & ! N2O emission from herbivores [kg(N2O)/m^2 s]
            zN2_emission_ecosystem(1:nidx),                &                  ! net ecosystem N2 emissions [kg(N2)/m^2 s]
-           leaf_shedding_rate(kidx0:kidx1,1:ntiles)) ! HW
+           leaf_shedding_rate(kidx0:kidx1,1:ntiles),& ! HW
+           relative_extractable_water(kidx0:kidx1,1:ntiles))  ! HW update_cbalance_bethy passing REW to bethy
 
    ELSE
       zCO2_flux_npp(1:nidx) = 0._dp
@@ -924,6 +932,7 @@ CONTAINS
 
    ! HW calculate relative wilting point
    relative_wilting_point(kidx0:kidx1)=theLand%soilparam%WiltingPoint(kidx0:kidx1)/theLand%soilparam%FieldCapacity(kidx0:kidx1)
+
 
    ! Update phenology, i.e. recompute LAI
 
