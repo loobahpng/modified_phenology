@@ -164,9 +164,10 @@ contains
                                           Cflx_herbivory,Cflx_herbivory_LG, Cflx_herbivory_2_atm,             &
                                           Cflx_2_crop_harvest, Cflx_crop_harvest_2_atm,                       &
                                           NPP_act,&
+                                          NPP2green, & ! HW
                                           leaf_shedding_debug,   & ! HW   
                                           Cpool_green_minus_shed_leaves,     & ! HW
-                                          excess_carbon_debug, & !HW  
+!                                          excess_carbon_debug, & !HW  
                                           litter_leaf,   & ! HW   
                                           leaf_shedding_rate, & ! HW  
                                           frac_litter_wood_new,                                      &
@@ -249,9 +250,10 @@ contains
 
     real(dp),intent(out)   :: leaf_shedding_debug       !! HW
     real(dp),intent(out)   :: Cpool_green_minus_shed_leaves     !! HW
-    real(dp),intent(out)   :: excess_carbon_debug       !! HW
+!    real(dp),intent(out)   :: excess_carbon_debug       !! HW
     real(dp),intent(out)   :: litter_leaf       !! HW
     real(dp),intent(in)   :: leaf_shedding_rate       !! HW
+    real(dp),intent(out)   :: NPP2green       !! HW
 
     real(dp),intent(out)   :: Cflx_herbivory         !!
     real(dp),intent(out)   :: Cflx_herbivory_LG      !!
@@ -457,8 +459,9 @@ contains
     Cflx_litterTotal      = 0.0_dp
 
     leaf_shedding_debug      = 0.0_dp ! HW
+    NPP2green      = 0.0_dp ! HW
     Cpool_green_minus_shed_leaves     = 0.0_dp ! HW
-    excess_carbon_debug      = 0.0_dp ! HW
+!    excess_carbon_debug      = 0.0_dp ! HW
     litter_leaf      = 0.0_dp ! HW
 
     Cflx_herbivory        = 0.0_dp
@@ -556,7 +559,7 @@ contains
        excess_carbon = max(0.0_dp,Cpool_green - Cpool_green_max)     !! If by the reduction of LAI the maximum value of the green
                                                                      !!    pool is still smaller than the current value, there is 
 
-       excess_carbon_debug=excess_carbon     ! HW
+!       excess_carbon_debug=excess_carbon     ! HW
 
        C_2_litter_greenPool = C_2_litter_greenPool + excess_carbon   !!    excess C that has also to be shedded to the green litter
        Cpool_green = Cpool_green - excess_carbon                     !!    pool and also substracted from the green pool
@@ -763,6 +766,10 @@ contains
                                                                              !!    current LAI.
           NPP_2_greenPool = NPP_2_greenPool - excess_carbon                  !! .. Hence the actual amount of NPP put to the green
                                                                              !!    pool is less.
+
+          NPP2green=NPP_2_greenPool                              !! HW
+!           excess_carbon_debug=NPP_2_greenPool  
+
           Cpool_green_pot = Cpool_green_pot - excess_carbon                  !! .. This excess carbon needs not be taken up but
           if(Cpool_reserve_pot < Cpool_reserve_optimal) then                 !! .... if the reserve pool is smaller than optimal
              Cpool_reserve_pot = Cpool_reserve_pot + excess_carbon           !! .... it is tried to put the carbon there,

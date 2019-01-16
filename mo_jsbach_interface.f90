@@ -301,6 +301,7 @@ CONTAINS
     REAL(dp), DIMENSION(kland) :: relative_wilting_point   !! HW
     REAL(dp), DIMENSION(kland,theLand%ntiles) :: relative_extractable_water   !! HW REW
     REAL(dp), DIMENSION(kland,theLand%ntiles) :: leaf_shedding_rate   !! HW
+    REAL(dp), DIMENSION(kland,theLand%ntiles) :: NPP2green   !! HW
 
     LOGICAL :: climbuf_init_running_means          !! climbuf option that is also needed in dynveg
     INTEGER :: ntiles, nsoil
@@ -921,8 +922,9 @@ CONTAINS
            zN2O_flux_grazing(1:nidx),                                     & ! N2O emission from herbivores [kg(N2O)/m^2 s]
            zN2_emission_ecosystem(1:nidx),                &                  ! net ecosystem N2 emissions [kg(N2)/m^2 s]
            leaf_shedding_rate(kidx0:kidx1,1:ntiles),& ! HW
-           relative_extractable_water(kidx0:kidx1,1:ntiles))  ! HW update_cbalance_bethy passing REW to bethy
-
+           relative_extractable_water(kidx0:kidx1,1:ntiles),&  ! HW update_cbalance_bethy passing REW to bethy
+           NPP2green(kidx0:kidx1,1:ntiles)& ! HW get NPP2green from bethy
+           )
    ELSE
       zCO2_flux_npp(1:nidx) = 0._dp
       zCO2_flux_soilresp(1:nidx) = 0._dp
@@ -951,7 +953,8 @@ CONTAINS
               specificLeafArea_C(1:nidx,1:ntiles), &
               theLand%Domain%lat(kidx0:kidx1), &
               relative_wilting_point(kidx0:kidx1),  &  ! HW
-              leaf_shedding_rate(kidx0:kidx1,1:ntiles) & ! HW
+              leaf_shedding_rate(kidx0:kidx1,1:ntiles), & ! HW
+              NPP2green(kidx0:kidx1,1:ntiles)&!HW pass NPP2green to phenology
               )
       CASE('KNORR')
          CALL update_phenology_ccdas(nidx, theLand%LctLibrary, &

@@ -267,6 +267,8 @@ MODULE mo_phenology
                                                   !! for each PFT at previous day, because not known for current day; updated at ..
                                                   !! the beginning of each new day (stream) 
 
+  REAL(dp), SAVE, POINTER :: previous_day_NPP2green_rate(:,:)!! HW
+
 
   REAL(dp), SAVE, POINTER :: laiMax_dyn(:,:)      !! Dynamical maximum LAI [m^2(leaf)/m^2(ground)]-- not larger than the maximum lai
                                                   !! coming from JSBACH, but smaller than that value when NPP is negative for more
@@ -288,6 +290,9 @@ MODULE mo_phenology
 
   REAL(dp), SAVE, POINTER :: day_NPP_sum(:,:)     !! sum of NPP since midnight (needed to compute previous_day_NPP_rate(:,:))
                                                   !! [mol(CO2)/m^2]
+
+  REAL(dp), SAVE, POINTER :: day_NPP2green_sum(:,:)     !! sum of NPP2green since midnight (needed to  HW 
+                                                  !! compute previous_day_NPP2green_rate(:,:)) [mol(CO2)/m^2]
 
   ! --- internal fields of subroutine "update_growth_phase"
 
@@ -480,7 +485,9 @@ CONTAINS
     chill_days_EG(:) = 0._dp                !! Counting of chill days has not yet started
     chill_days_SG(:) = 0._dp                !! Counting of chill days has not yet started
     previous_day_NPP_rate(:,:) = 0._dp      !! Computing of previous days NPP-rate has not yet started
+    previous_day_NPP2green_rate(:,:) = 0._dp      !! HW
     day_NPP_sum(:,:) = 0._dp                !! Computing of previous days NPP-rate has not yet started
+    day_NPP2green_sum(:,:) = 0._dp                !! HW
     year_NPP_sum(:,:) = 2._dp * LARGE       !! Yearly summation has not yet started.
 
     ! --- debug message 
@@ -508,7 +515,7 @@ CONTAINS
   ! landpoints a particular processor handles (e.g. the LAI). The block currently processed by the processor is 
   ! procArray(kstart:kend) --- this is what has to be handed over to update_phenology().
   !
-  SUBROUTINE update_phenology(kidx,pheno_type_of_tile,lai,laiMax_stat,air_temp,relative_moisture,NPP_rate,specLeafArea,lat,relative_wilting_point,leaf_shedding_rate) ! HW
+  SUBROUTINE update_phenology(kidx,pheno_type_of_tile,lai,laiMax_stat,air_temp,relative_moisture,NPP_rate,specLeafArea,lat,relative_wilting_point,leaf_shedding_rate,NPP2green) ! HW
 
     INTEGER, INTENT(IN)           :: kidx                      !! the number of elements in the current call (= kend - kstart +1)
     INTEGER, INTENT(in)           :: pheno_type_of_tile(:,:)   !! The phenology types of the tiles of grid points (including
@@ -521,6 +528,7 @@ CONTAINS
     REAL(dp),INTENT(in)           :: relative_moisture(:,:)    !! Filling of the soil water bucket. Dimension: (1:nidx,1:ntiles)
     REAL(dp),INTENT(in)           :: relative_wilting_point(:)    !! relative wilting point. Dimension: (1:nidx) !HW
     REAL(dp),INTENT(out)        :: leaf_shedding_rate(:,:)        !!  Dimension:(1:nidx,1:ntiles) !HW
+    REAL(dp),INTENT(in)        :: NPP2green(:,:)        !!  Dimension:(1:nidx,1:ntiles) !HW
     REAL(dp),INTENT(in)           :: NPP_rate(:,:)             !! Net primary production rate density [mol(CO2)/m^2/s] for each PFT.
                                                                !! Needed to determine the shedding rate of raingreens and grasses.
                                                                !! Dimension: (1:nidx,1:ntiles) 
@@ -580,7 +588,7 @@ CONTAINS
 
     ! --- sum up the day temperatures and NPP-rates
 
-    CALL update_previous_day_variables(air_temp,NPP_rate)
+    CALL update_previous_day_variables(air_temp,NPP_rate,NPP2green)
 
     ! --- recompute pseudo-soil temperature
 
@@ -670,7 +678,11 @@ CONTAINS
                       xtmp   = shedRate_RG(average_filling(j),relative_wilting_point(j))  ! HW    
                       leaf_shedding_rate(j,i)=xtmp                                        ! HW
                       !!!! use RG%shedRate_drySeason as growth rate
-                      lai(j,i) =  letItGrow(lai(j,i), PhenParams%RG%shedRate_drySeason%v, xtmp, laiMax_dyn(k,i))     !! start growing. HW use RG%shedRate_drySeason as growth rate
+                        ! use letItGrowNL in which growth solely comes from
+                        ! NPPgreen/gamma
+                       lai(j,i)=letItGrowNL(lai(j,i),previous_day_NPP_rate(k,i)*86400.*0.25*specLeafArea(j,i),xtmp,laiMax_dyn(k,i))
+
+!                      lai(j,i) =  letItGrow(lai(j,i), PhenParams%RG%shedRate_drySeason%v, xtmp, laiMax_dyn(k,i))     !! start growing. HW use RG%shedRate_drySeason as growth rate
 
 !                      lai(j,i) =  letItGrow(lai(j,i), grRate, xtmp, laiMax_dyn(k,i))     !! start growing.
                    !END IF 
@@ -818,12 +830,13 @@ CONTAINS
   ! Updates the mean day temperature (private field "previous_day_temp(:)") from air temperature and the mean day NPP-rate
   ! (private field previous_day_NPP(:,:)
   !
-  SUBROUTINE update_previous_day_variables(air_temp,NPP_rate)
+  SUBROUTINE update_previous_day_variables(air_temp,NPP_rate,NPP2green)
 
     USE mo_time_control, ONLY: delta_time   !! time step in seconds
 
     REAL(dp) :: air_temp(1:nidx) !! air temperature at current time step in lowest atmospheric layer for each grid point
     REAL(dp) :: NPP_rate(1:nidx,1:ntiles) !! NPP-rate during current time step for each tile (PFT)
+    REAL(dp) :: NPP2green(1:nidx,1:ntiles) !! NPP2green during current time step for each tile (PFT)
     INTEGER :: kidx0, kidx1, i
 
     kidx0 = kstart
@@ -844,9 +857,12 @@ CONTAINS
        day_temp_max(kidx0:kidx1) = air_temp(1:nidx)
        previous_day_NPP_rate(kidx0:kidx1,1:ntiles) = day_NPP_sum(kidx0:kidx1,1:ntiles)/86400.
        day_NPP_sum(kidx0:kidx1,1:ntiles) = NPP_rate(1:nidx,1:ntiles)*delta_time
+!       previous_day_NPP2green_rate(kidx0:kidx1,1:ntiles) = day_NPP2green_sum(kidx0:kidx1,1:ntiles)/86400.! HW
+!       day_NPP2green_sum(kidx0:kidx1,1:ntiles) = NPP2green(1:nidx,1:ntiles)/86400.*delta_time ! HW
     ELSE  !! day has not changed
        day_temp_sum(kidx0:kidx1) = day_temp_sum(kidx0:kidx1) + air_temp(1:nidx)
        day_NPP_sum(kidx0:kidx1,1:ntiles) = day_NPP_sum(kidx0:kidx1,1:ntiles) + NPP_rate(1:nidx,1:ntiles)*delta_time
+!       day_NPP2green_sum(kidx0:kidx1,1:ntiles) = day_NPP2green_sum(kidx0:kidx1,1:ntiles) + NPP2green(1:nidx,1:ntiles)/86400.*delta_time ! HW
        DO i = 1,nidx
           IF (day_temp_min(kidx0+i-1) > air_temp(i)) day_temp_min(kidx0+i-1) = air_temp(i)
           IF (day_temp_max(kidx0+i-1) < air_temp(i)) day_temp_max(kidx0+i-1) = air_temp(i)
@@ -1301,6 +1317,33 @@ CONTAINS
     letItDie = EXP(-p * timeStep_in_days) * x
 
   END FUNCTION letItDie
+
+!---------------------------------- HW
+  ! --- letItGrowNL() ---------------------------------------------------------------
+  !
+  ! This is the function letItGrowNL() for k is const and shedding rate p
+  !                  k          k-px
+  !      x(t+tau) = ----  -  ------------
+  !                  p       p*exp(p*tau)
+  !
+  REAL(dp) elemental FUNCTION letItGrowNL(x,k,p,z)  !! returns x(t+tau)
+
+    REAL(dp),INTENT(IN) :: x            !! LAI at time t 
+    REAL(dp),INTENT(IN) :: k            !! growth rate          (units: m2/m2)
+    REAL(dp),INTENT(IN) :: p            !! leaf shedding rate   (units: 1/days)
+    REAL(dp),INTENT(IN) :: z            !! maximum LAI
+
+    if (p .eq. 0) then! shedding rate is zero
+        letItGrowNL=x+k*timeStep_in_days
+    else
+        letItGrowNL = (k/p)-((k-p*x)/(p*exp(p*timeStep_in_days)))
+    endif
+    if (letItGrowNL .gt. z) then! new LAI larger than maxLAI
+        letItGrowNL=z
+    endif
+
+  END FUNCTION letItGrowNL
+
 
   ! --- shedRate_RG ---------------------------------------------------------------------------------------------------------------
   !

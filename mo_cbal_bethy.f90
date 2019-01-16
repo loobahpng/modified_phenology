@@ -175,7 +175,8 @@ module mo_cbal_bethy
      ! -----HW
      REAL(dp),POINTER :: leaf_shedding_debug(:,:)             !!
      REAL(dp),POINTER :: Cpool_green_minus_shed_leaves(:,:)             !!
-     REAL(dp),POINTER :: excess_carbon_debug(:,:)             !!
+!     REAL(dp),POINTER :: excess_carbon_debug(:,:)             !!
+     REAL(dp),POINTER :: NPP2green(:,:)             !! HW
      REAL(dp),POINTER :: litter_leaf(:,:)             !! Carbon flux from the leaf to the litter pools [mol(C)/m^2(canopy) s]
      REAL(dp),POINTER :: box_litter_leaf(:,:)         !! Same as litter_leaf, but relative to grid box area [mol(C)/m^2(grid box) s]
      real(dp),pointer :: leaf_shedding_rate(:,:) ! HW
@@ -954,8 +955,11 @@ CONTAINS
     CALL add(IO_cbalance,'Cpool_green_minus_green_litter',cbalance_diag%Cpool_green_minus_shed_leaves, contnorest=.true. ,  &
              longname='Cpool_green_minus_green_litter', units='',  &
              ldims=dim3p, gdims=dim3, dimnames=dim3n, code=213, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
-    CALL add(IO_cbalance,'excess_carbon_debug',cbalance_diag%excess_carbon_debug, contnorest=.true. ,     &
-             longname='excess_carbon_debug', units='',  &
+!    CALL add(IO_cbalance,'excess_carbon_debug',cbalance_diag%excess_carbon_debug, contnorest=.true. ,     &
+!             longname='excess_carbon_debug', units='',  &
+!             ldims=dim3p, gdims=dim3, dimnames=dim3n, code=214, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
+    CALL add(IO_cbalance,'NPP_2_greenPool',cbalance_diag%NPP2green, contnorest=.true. ,     &
+             longname='NPP_2_greenPool', units='',  &
              ldims=dim3p, gdims=dim3, dimnames=dim3n, code=214, lrerun=.TRUE., lmiss=.TRUE., missval=missing_value)
     CALL add(IO_cbalance,'litter_green',cbalance_diag%litter_leaf, contnorest=.true. ,     &
              longname='green litter flux entering the soil pools', units='mol(CO2) m-2(canopy) s-1',  &
@@ -1848,8 +1852,9 @@ CONTAINS
     cbalance_diag%box_litter_flux = 0.0_dp
     ! ---HW
     cbalance_diag%leaf_shedding_debug = 0.0_dp
+    cbalance_diag%NPP2green= 0.0_dp
     cbalance_diag%Cpool_green_minus_shed_leaves = 0.0_dp
-    cbalance_diag%excess_carbon_debug = 0.0_dp
+!    cbalance_diag%excess_carbon_debug = 0.0_dp
     cbalance_diag%litter_leaf = 0.0_dp
     cbalance_diag%box_litter_leaf = 0.0_dp
     cbalance_diag%relative_extractable_water = 0.0_dp
@@ -2162,6 +2167,7 @@ CONTAINS
                                    N2_flx2atm_ecosystem &
                                    , leaf_shedding_rate & ! HW
                                    , relative_extractable_water & ! HW
+                                   , NPP2green & ! HW
                                    )
 
     
@@ -2202,6 +2208,7 @@ CONTAINS
     real(dp),intent(in)               :: leaf_shedding_rate(:,:)   !! HW
 
     real(dp),intent(in)               :: relative_extractable_water(:,:)   !! HW REW
+    real(dp),intent(out)              :: NPP2green(:,:)   !! HW NPP2green
 
     REAL(dp),INTENT(out)              :: CO2_flx2atm_npp(:)        !! grid cell averages of net CO2 fluxes between
     REAL(dp),INTENT(out)              :: CO2_flx2atm_soilresp(:)   !! .. biosphere (due to NPP, soil respiration and
@@ -2544,9 +2551,10 @@ CONTAINS
                               cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                               cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                               cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%NPP2green(kidx0:kidx1,:),      &! HW
                               cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
                               cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
-                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+!                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
                               cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
                               cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new      =cbalance%frac_litter_wood_new(kidx0:kidx1,:),      &
@@ -2617,9 +2625,10 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%NPP2green(kidx0:kidx1,:),  &! HW
                               cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
                               cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
-                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+!                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
                                cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
                               cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new    =  cbalance%frac_litter_wood_new(kidx0:kidx1,:),       &
@@ -2727,9 +2736,10 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%NPP2green(kidx0:kidx1,:),  &! HW
                               cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
                               cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
-                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+!                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
                                cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
                               cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
     frac_litter_wood_new    =  cbalance%frac_litter_wood_new(kidx0:kidx1,:),       &
@@ -2808,9 +2818,10 @@ CONTAINS
                                cbalance%Cflx_2_crop_harvest(kidx0:kidx1,:),        &
                                cbalance%Cflx_crop_harvest_2_atm(kidx0:kidx1,:),    &
                                cbalance%NPP_act_yDayMean(kidx0:kidx1,:),           &
+                              cbalance_diag%NPP2green(kidx0:kidx1,:),  &! HW
                               cbalance_diag%leaf_shedding_debug(kidx0:kidx1,:),           & !HW
                               cbalance_diag%Cpool_green_minus_shed_leaves(kidx0:kidx1,:),           & !HW
-                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
+!                              cbalance_diag%excess_carbon_debug(kidx0:kidx1,:),           & !HW
                                cbalance_diag%litter_leaf(kidx0:kidx1,:),           & !HW
                               cbalance_diag%leaf_shedding_rate(kidx0:kidx1,:),           & !HW
        frac_litter_wood_new  = cbalance%frac_litter_wood_new(kidx0:kidx1,:)        &
